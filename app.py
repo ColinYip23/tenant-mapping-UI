@@ -10,30 +10,7 @@ st.set_page_config(
     layout="centered"
 )
 
-# Custom CSS for a professional look and Black Text
-st.markdown("""
-    <style>
-    .stApp { background-color: #f9f9f9; }
-    /* Force text inside expanders and inputs to be black */
-    .st-expander, .st-expander p, .st-expander span, .st-expander label {
-        color: #000000 !important;
-    }
-    .st-expander { 
-        border: 1px solid #e6e6e6; 
-        border-radius: 8px; 
-        background-color: white !important; 
-        margin-bottom: 10px; 
-    }
-    /* Style titles */
-    .column-header {
-        font-weight: bold;
-        color: #333333;
-        margin-bottom: 5px;
-        text-decoration: underline;
-    }
-    .stButton button { width: 100%; border-radius: 5px; }
-    </style>
-    """, unsafe_allow_html=True)
+
 
 # ==========================================
 # 2. DATABASE SETUP (SUPABASE)

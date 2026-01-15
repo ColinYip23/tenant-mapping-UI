@@ -58,13 +58,13 @@ except Exception as e:
 st.title("🗺️ Tenant RAG Mapping Manager")
 st.write("Manage which Knowledge Base each tenant is connected to.")
 
-st.markdown("### ➕ Add New Tenant Mapping")
+st.markdown("### Tenant Mappings")
 
 with st.expander("Add a new tenant → Knowledge Base mapping"):
     with st.form("add_new_mapping_form"):
         new_whatsapp = st.text_input(
             "WhatsApp Number",
-            placeholder="+60123456789"
+            placeholder="0123456789"
         )
 
         new_source_name = st.selectbox(

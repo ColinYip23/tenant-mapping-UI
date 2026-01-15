@@ -58,6 +58,42 @@ except Exception as e:
 st.title("🗺️ Tenant RAG Mapping Manager")
 st.write("Manage which Knowledge Base each tenant is connected to.")
 
+st.markdown("### ➕ Add New Tenant Mapping")
+
+with st.expander("Add a new tenant → Knowledge Base mapping"):
+    with st.form("add_new_mapping_form"):
+        new_whatsapp = st.text_input(
+            "WhatsApp Number",
+            placeholder="+60123456789"
+        )
+
+        new_source_name = st.selectbox(
+            "Assign Knowledge Base",
+            options=sorted(list(SOURCE_MAP.values()))
+        )
+
+        create_btn = st.form_submit_button("Create Mapping")
+
+        if create_btn:
+            if not new_whatsapp.strip():
+                st.error("WhatsApp number is required.")
+            else:
+                db_value = REVERSE_MAP.get(new_source_name, new_source_name)
+
+                try:
+                    supabase.table("tenant mapping").insert({
+                        "WhatsApp number": new_whatsapp,
+                        "RAG source": db_value
+                    }).execute()
+
+                    st.success(f"Mapping created for {new_whatsapp}")
+                    st.cache_data.clear()
+                    st.rerun()
+
+                except Exception as e:
+                    st.error(f"Failed to create mapping: {e}")
+
+
 if tenants:
     display_options = sorted(list(SOURCE_MAP.values()))
 

@@ -27,8 +27,17 @@ st.markdown("""
 if not firebase_admin._apps:
     try:
         fb_creds = dict(st.secrets["firebase"])
-        # Fix for newline characters in TOML secrets
-        fb_creds["private_key"] = fb_creds["private_key"].replace("\\n", "\n")
+        
+        # 1. First, handle any literal backslashes that might have been added
+        raw_key = fb_creds["private_key"]
+        
+        # 2. Convert literal "\n" strings into real newline characters
+        # and strip any accidental whitespace around the key
+        clean_key = raw_key.replace("\\n", "\n").strip()
+        
+        # 3. Apply the cleaned key back to the dictionary
+        fb_creds["private_key"] = clean_key
+        
         cred = credentials.Certificate(fb_creds)
         firebase_admin.initialize_app(cred)
     except Exception as e:

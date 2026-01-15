@@ -1,6 +1,12 @@
 import streamlit as st
 from supabase import create_client, Client
 
+st.set_page_config(
+    page_title="Tenant Mapping Manager", # Changes the browser tab title
+    page_icon="🗺️",                      # Changes the browser favicon
+    layout="centered"                    # Options: "centered" or "wide"
+)
+
 # 1. Setup Connection
 url = st.secrets["SUPABASE_URL"]
 key = st.secrets["SUPABASE_KEY"]

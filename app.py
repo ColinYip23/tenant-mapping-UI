@@ -10,7 +10,22 @@ st.set_page_config(
     layout="centered"
 )
 
+st.markdown(
+    """
+    <style>
+    /* Change cursor to hand for selectbox */
+    div[data-baseweb="select"] {
+        cursor: pointer;
+    }
 
+    /* Ensure all inner elements also show pointer */
+    div[data-baseweb="select"] * {
+        cursor: pointer !important;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True
+)
 
 # ==========================================
 # 2. DATABASE SETUP (SUPABASE)

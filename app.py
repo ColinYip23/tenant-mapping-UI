@@ -1,68 +1,131 @@
 import streamlit as st
 from supabase import create_client, Client
+import firebase_admin
+from firebase_admin import credentials, auth
 
+# ==========================================
+# 1. PAGE CONFIGURATION
+# ==========================================
 st.set_page_config(
-    page_title="Tenant Mapping Manager", # Changes the browser tab title
-    page_icon="🗺️",                      # Changes the browser favicon
-    layout="centered"                    # Options: "centered" or "wide"
+    page_title="Tenant Mapping Manager",
+    page_icon="🗺️",
+    layout="centered"
 )
 
-# 1. Setup Connection
+# Custom CSS for a professional look
+st.markdown("""
+    <style>
+    .stApp { background-color: #f9f9f9; }
+    .st-expander { border: 1px solid #e6e6e6; border-radius: 8px; background-color: white; margin-bottom: 10px; }
+    .stButton button { width: 100%; border-radius: 5px; }
+    </style>
+    """, unsafe_allow_html=True)
+
+# ==========================================
+# 2. AUTHENTICATION (FIREBASE)
+# ==========================================
+if not firebase_admin._apps:
+    try:
+        fb_creds = dict(st.secrets["firebase"])
+        # Fix for newline characters in TOML secrets
+        fb_creds["private_key"] = fb_creds["private_key"].replace("\\n", "\n")
+        cred = credentials.Certificate(fb_creds)
+        firebase_admin.initialize_app(cred)
+    except Exception as e:
+        st.error(f"Internal Error: Firebase setup failed. {e}")
+
+if "authenticated" not in st.session_state:
+    st.session_state.authenticated = False
+
+def login_screen():
+    st.title("🗺️ Tenant Manager Login")
+    email = st.text_input("Email Address")
+    password = st.text_input("Password", type="password")
+    
+    if st.button("Sign In"):
+        try:
+            # Check if user exists in Firebase
+            user = auth.get_user_by_email(email)
+            st.session_state.authenticated = True
+            st.rerun()
+        except Exception:
+            st.error("Access Denied: Invalid credentials or unauthorized user.")
+
+if not st.session_state.authenticated:
+    login_screen()
+    st.stop()
+
+# ==========================================
+# 3. DATABASE SETUP (SUPABASE)
+# ==========================================
+# Sidebar Logout
+if st.sidebar.button("Logout"):
+    st.session_state.authenticated = False
+    st.rerun()
+
 url = st.secrets["SUPABASE_URL"]
 key = st.secrets["SUPABASE_KEY"]
 supabase: Client = create_client(url, key)
 
-# 2. Fetch All Data
 @st.cache_data(ttl=60)
 def get_all_data():
-    # Fetch Tenants
+    # Fetch data using exact column names from your DB
     tenants = supabase.table("tenant mapping").select("*").execute().data
-    
-    # Fetch RAG Source Mappings
     sources = supabase.table("rag sources").select("*").execute().data
     
-    # Create Dictionaries for easy lookup
+    # Map Phone Numbers to Friendly Names
     num_to_name = {s['RAG source']: s['source name'] for s in sources}
     name_to_num = {s['source name']: s['RAG source'] for s in sources}
     
     return tenants, num_to_name, name_to_num
 
-tenants, SOURCE_MAP, REVERSE_MAP = get_all_data()
+try:
+    tenants, SOURCE_MAP, REVERSE_MAP = get_all_data()
+except Exception as e:
+    st.error(f"Database Error: {e}")
+    st.stop()
 
-st.title("Tenant RAG Mapping Manager")
+# ==========================================
+# 4. MANAGEMENT UI
+# ==========================================
+st.title("🗺️ Tenant RAG Mapping Manager")
+st.write("Manage which Knowledge Base each tenant is connected to.")
 
-# 3. Management UI
 if tenants:
-    # Use a dropdown list of the friendly names we found in the database
     display_options = sorted(list(SOURCE_MAP.values()))
 
     for tenant in tenants:
+        # Resolve current mapping
         current_num = tenant.get('RAG source', "Default")
         current_display = SOURCE_MAP.get(current_num, current_num)
         
-        # We use expanded=False by default, but the form prevents the 'auto-close' on change
-        with st.expander(f"Tenant: {tenant['WhatsApp number']} ({current_display})"):
-            # Wrap the selection and button in a form
+        # Expander for each tenant
+        with st.expander(f"Tenant: {tenant.get('WhatsApp number', 'Unknown')} — ({current_display})"):
+            # Use form to prevent page refresh/expander closing during selection
             with st.form(key=f"form_{tenant['id']}"):
+                st.write(f"**Current RAG Number:** `{current_num}`")
+                
                 selected_name = st.selectbox(
-                    "Change Knowledge Base",
+                    "Assign New Knowledge Base",
                     options=display_options,
                     index=display_options.index(current_display) if current_display in display_options else 0
                 )
                 
-                # Use form_submit_button instead of st.button
                 submit_button = st.form_submit_button("Save Changes")
                 
                 if submit_button:
                     db_value = REVERSE_MAP.get(selected_name, selected_name)
                     
-                    supabase.table("tenant mapping") \
-                        .update({"RAG source": db_value}) \
-                        .eq("id", tenant["id"]) \
-                        .execute()
-                    
-                    st.success("Updated!")
-                    st.cache_data.clear()
-                    st.rerun()
+                    try:
+                        supabase.table("tenant mapping") \
+                            .update({"RAG source": db_value}) \
+                            .eq("id", tenant["id"]) \
+                            .execute()
+                        
+                        st.success(f"Updated to {selected_name}")
+                        st.cache_data.clear() # Clear cache to refresh the UI
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Update failed: {e}")
 else:
-    st.info("No tenants found.")
+    st.info("No tenants found in the database.")

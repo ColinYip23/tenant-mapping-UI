@@ -2,8 +2,8 @@ import streamlit as st
 from supabase import create_client, Client
 
 # 1. Setup Connection
-url = "https://olxkyjgzrmddodluuwbd.supabase.co"
-key = "sb_secret_MXc_h5Ye8_3RqlG2cQ7EsA_winHKfK3"
+url = st.secrets["SUPABASE_URL"]
+key = st.secrets["SUPABASE_KEY"]
 supabase: Client = create_client(url, key)
 
 # 2. Fetch All Data

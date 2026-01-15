@@ -60,7 +60,7 @@ st.write("Manage which Knowledge Base each tenant is connected to.")
 
 st.markdown("### Tenant Mappings")
 
-with st.expander("Add a new tenant → Knowledge Base mapping"):
+with st.expander("➕ Add a new tenant → Knowledge Base mapping"):
     with st.form("add_new_mapping_form"):
         new_whatsapp = st.text_input(
             "WhatsApp Number",

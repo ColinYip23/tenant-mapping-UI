@@ -12,11 +12,27 @@ st.set_page_config(
     layout="centered"
 )
 
-# Custom CSS for a professional look
+# Custom CSS for a professional look and Black Text
 st.markdown("""
     <style>
     .stApp { background-color: #f9f9f9; }
-    .st-expander { border: 1px solid #e6e6e6; border-radius: 8px; background-color: white; margin-bottom: 10px; }
+    /* Force text inside expanders and inputs to be black */
+    .st-expander, .st-expander p, .st-expander span, .st-expander label {
+        color: #000000 !important;
+    }
+    .st-expander { 
+        border: 1px solid #e6e6e6; 
+        border-radius: 8px; 
+        background-color: white !important; 
+        margin-bottom: 10px; 
+    }
+    /* Style titles */
+    .column-header {
+        font-weight: bold;
+        color: #333333;
+        margin-bottom: 5px;
+        text-decoration: underline;
+    }
     .stButton button { width: 100%; border-radius: 5px; }
     </style>
     """, unsafe_allow_html=True)
@@ -27,15 +43,8 @@ st.markdown("""
 if not firebase_admin._apps:
     try:
         fb_creds = dict(st.secrets["firebase"])
-        
-        # 1. First, handle any literal backslashes that might have been added
         raw_key = fb_creds["private_key"]
-        
-        # 2. Convert literal "\n" strings into real newline characters
-        # and strip any accidental whitespace around the key
         clean_key = raw_key.replace("\\n", "\n").strip()
-        
-        # 3. Apply the cleaned key back to the dictionary
         fb_creds["private_key"] = clean_key
         
         cred = credentials.Certificate(fb_creds)
@@ -53,7 +62,6 @@ def login_screen():
     
     if st.button("Sign In"):
         try:
-            # Check if user exists in Firebase
             user = auth.get_user_by_email(email)
             st.session_state.authenticated = True
             st.rerun()
@@ -67,7 +75,6 @@ if not st.session_state.authenticated:
 # ==========================================
 # 3. DATABASE SETUP (SUPABASE)
 # ==========================================
-# Sidebar Logout
 if st.sidebar.button("Logout"):
     st.session_state.authenticated = False
     st.rerun()
@@ -78,11 +85,9 @@ supabase: Client = create_client(url, key)
 
 @st.cache_data(ttl=60)
 def get_all_data():
-    # Fetch data using exact column names from your DB
     tenants = supabase.table("tenant mapping").select("*").execute().data
     sources = supabase.table("rag sources").select("*").execute().data
     
-    # Map Phone Numbers to Friendly Names
     num_to_name = {s['RAG source']: s['source name'] for s in sources}
     name_to_num = {s['source name']: s['RAG source'] for s in sources}
     
@@ -104,27 +109,36 @@ if tenants:
     display_options = sorted(list(SOURCE_MAP.values()))
 
     for tenant in tenants:
-        # Resolve current mapping
         current_num = tenant.get('RAG source', "Default")
         current_display = SOURCE_MAP.get(current_num, current_num)
+        whatsapp = tenant.get('WhatsApp number', 'Unknown')
         
-        # Expander for each tenant
-        with st.expander(f"Tenant: {tenant.get('WhatsApp number', 'Unknown')} — ({current_display})"):
-            # Use form to prevent page refresh/expander closing during selection
+        # Expander with explicit Black Text styling
+        with st.expander(f"📱 {whatsapp} — Current: {current_display}"):
             with st.form(key=f"form_{tenant['id']}"):
-                st.write(f"**Current RAG Number:** `{current_num}`")
                 
-                selected_name = st.selectbox(
-                    "Assign New Knowledge Base",
-                    options=display_options,
-                    index=display_options.index(current_display) if current_display in display_options else 0
-                )
+                # Column Titles for clarity
+                col1, col2 = st.columns(2)
                 
+                with col1:
+                    st.markdown('<p class="column-header">Current RAG Details</p>', unsafe_allow_html=True)
+                    st.write(f"**WhatsApp:** {whatsapp}")
+                    st.write(f"**Source Number:** `{current_num}`")
+                
+                with col2:
+                    st.markdown('<p class="column-header">Update Mapping</p>', unsafe_allow_html=True)
+                    selected_name = st.selectbox(
+                        "Assign New Knowledge Base",
+                        options=display_options,
+                        index=display_options.index(current_display) if current_display in display_options else 0,
+                        label_visibility="collapsed" # Hide the redundant label as we have a title
+                    )
+                
+                st.write("---")
                 submit_button = st.form_submit_button("Save Changes")
                 
                 if submit_button:
                     db_value = REVERSE_MAP.get(selected_name, selected_name)
-                    
                     try:
                         supabase.table("tenant mapping") \
                             .update({"RAG source": db_value}) \
@@ -132,7 +146,7 @@ if tenants:
                             .execute()
                         
                         st.success(f"Updated to {selected_name}")
-                        st.cache_data.clear() # Clear cache to refresh the UI
+                        st.cache_data.clear()
                         st.rerun()
                     except Exception as e:
                         st.error(f"Update failed: {e}")

@@ -10,6 +10,9 @@ st.set_page_config(
     layout="centered"
 )
 
+# ==========================================
+# 2. GLOBAL STYLES
+# ==========================================
 st.markdown(
     """
     <style>
@@ -18,9 +21,14 @@ st.markdown(
         cursor: pointer;
     }
 
-    /* Ensure all inner elements also show pointer */
     div[data-baseweb="select"] * {
         cursor: pointer !important;
+    }
+
+    /* Danger button hint */
+    .danger-text {
+        color: #ff4b4b;
+        font-weight: 600;
     }
     </style>
     """,
@@ -28,7 +36,7 @@ st.markdown(
 )
 
 # ==========================================
-# 2. DATABASE SETUP (SUPABASE)
+# 3. DATABASE SETUP (SUPABASE)
 # ==========================================
 url = st.secrets["SUPABASE_URL"]
 key = st.secrets["SUPABASE_KEY"]
@@ -36,14 +44,12 @@ supabase: Client = create_client(url, key)
 
 @st.cache_data(ttl=60)
 def get_all_data():
-    # Fetch data using exact column names from your DB
     tenants = supabase.table("tenant mapping").select("*").execute().data
     sources = supabase.table("rag sources").select("*").execute().data
-    
-    # Map Phone Numbers to Friendly Names
-    num_to_name = {s['RAG source']: s['source name'] for s in sources}
-    name_to_num = {s['source name']: s['RAG source'] for s in sources}
-    
+
+    num_to_name = {s["RAG source"]: s["source name"] for s in sources}
+    name_to_num = {s["source name"]: s["RAG source"] for s in sources}
+
     return tenants, num_to_name, name_to_num
 
 try:
@@ -53,13 +59,15 @@ except Exception as e:
     st.stop()
 
 # ==========================================
-# 3. MANAGEMENT UI
+# 4. PAGE HEADER
 # ==========================================
 st.title("🗺️ Tenant RAG Mapping Manager")
 st.write("Manage which Knowledge Base each tenant is connected to.")
-
 st.markdown("### Tenant Mappings")
 
+# ==========================================
+# 5. ADD NEW MAPPING
+# ==========================================
 with st.expander("➕ Add a new tenant → Knowledge Base mapping"):
     with st.form("add_new_mapping_form"):
         new_whatsapp = st.text_input(
@@ -69,13 +77,15 @@ with st.expander("➕ Add a new tenant → Knowledge Base mapping"):
 
         new_source_name = st.selectbox(
             "Assign Knowledge Base",
-            options=sorted(list(SOURCE_MAP.values()))
+            options=sorted(SOURCE_MAP.values())
         )
 
         create_btn = st.form_submit_button("Create Mapping")
 
         if create_btn:
-            if not new_whatsapp.strip():
+            new_whatsapp = new_whatsapp.strip()
+
+            if not new_whatsapp:
                 st.error("WhatsApp number is required.")
             else:
                 db_value = REVERSE_MAP.get(new_source_name, new_source_name)
@@ -93,51 +103,83 @@ with st.expander("➕ Add a new tenant → Knowledge Base mapping"):
                 except Exception as e:
                     st.error(f"Failed to create mapping: {e}")
 
-
+# ==========================================
+# 6. EXISTING TENANT MAPPINGS
+# ==========================================
 if tenants:
-    display_options = sorted(list(SOURCE_MAP.values()))
+    display_options = sorted(SOURCE_MAP.values())
 
     for tenant in tenants:
-        current_num = tenant.get('RAG source', "Default")
+        tenant_id = tenant["id"]
+        whatsapp = tenant.get("WhatsApp number", "Unknown")
+        current_num = tenant.get("RAG source", "Default")
         current_display = SOURCE_MAP.get(current_num, current_num)
-        whatsapp = tenant.get('WhatsApp number', 'Unknown')
-        
-        # Expander with explicit Black Text styling
+
         with st.expander(f"📱 {whatsapp} — Current: {current_display}"):
-            with st.form(key=f"form_{tenant['id']}"):
-                
-                # Column Titles for clarity
+            with st.form(key=f"form_{tenant_id}"):
+
                 col1, col2 = st.columns(2)
-                
+
                 with col1:
-                    st.markdown('<p class="column-header">Current RAG Details</p>', unsafe_allow_html=True)
+                    st.markdown("**Current RAG Details**")
                     st.write(f"**WhatsApp:** {whatsapp}")
                     st.write(f"**Source Number:** `{current_num}`")
-                
+
                 with col2:
-                    st.markdown('<p class="column-header">Update Mapping</p>', unsafe_allow_html=True)
+                    st.markdown("**Update Mapping**")
                     selected_name = st.selectbox(
                         "Assign New Knowledge Base",
                         options=display_options,
-                        index=display_options.index(current_display) if current_display in display_options else 0,
-                        label_visibility="collapsed" # Hide the redundant label as we have a title
+                        index=display_options.index(current_display)
+                        if current_display in display_options else 0,
+                        label_visibility="collapsed"
                     )
-                
+
                 st.write("---")
-                submit_button = st.form_submit_button("Save Changes")
-                
-                if submit_button:
+
+                confirm_delete = st.checkbox(
+                    "I understand this will permanently delete this mapping",
+                    key=f"confirm_{tenant_id}"
+                )
+
+                col_save, col_delete = st.columns([3, 1])
+
+                save_btn = col_save.form_submit_button("Save Changes")
+                delete_btn = col_delete.form_submit_button("🗑️ Delete")
+
+                # ---------------- UPDATE ----------------
+                if save_btn:
                     db_value = REVERSE_MAP.get(selected_name, selected_name)
                     try:
                         supabase.table("tenant mapping") \
                             .update({"RAG source": db_value}) \
-                            .eq("id", tenant["id"]) \
+                            .eq("id", tenant_id) \
                             .execute()
-                        
+
                         st.success(f"Updated to {selected_name}")
                         st.cache_data.clear()
                         st.rerun()
+
                     except Exception as e:
                         st.error(f"Update failed: {e}")
+
+                # ---------------- DELETE ----------------
+                if delete_btn:
+                    if not confirm_delete:
+                        st.error("Please confirm deletion first.")
+                    else:
+                        try:
+                            supabase.table("tenant mapping") \
+                                .delete() \
+                                .eq("id", tenant_id) \
+                                .execute()
+
+                            st.success(f"Deleted mapping for {whatsapp}")
+                            st.cache_data.clear()
+                            st.rerun()
+
+                        except Exception as e:
+                            st.error(f"Delete failed: {e}")
+
 else:
     st.info("No tenants found in the database.")
